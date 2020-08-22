@@ -3,9 +3,10 @@
     "start": "snowpack dev",
     "build": "snowpack build"
   },
-  "dependencies": {},
+  "dependencies": {
+    "gl-matrix": "file:/home/octothorp/code/TrySound.gl-matrix/dist"
+  },
   "devDependencies": {
-    "@types/gl-matrix": "^3.2.0",
     "prettier": "^2.0.5",
     "snowpack": "^2.8.0",
     "typescript": "^3.9.7"
