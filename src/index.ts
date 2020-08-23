@@ -13,11 +13,21 @@ assert(canvas, 'No canvas');
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
-const aspectRatio = canvas.width / canvas.height;
+
+const fov = 90;
+const nearPlane = 0.01;
+const farPlane = 100;
+
+const getPerspectiveMatrix = (aspect: number) =>
+  mat4Perspective(mat4Create(), fov, aspect, nearPlane, farPlane);
+
+let projMat = getPerspectiveMatrix(canvas.width / canvas.height);
 
 window.addEventListener('resize', () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  const aspect = canvas.width / canvas.height;
+  projMat = getPerspectiveMatrix(aspect);
 });
 
 const gl = canvas.getContext('webgl2');
@@ -31,8 +41,8 @@ const makeTriangleStrapVertices = (width: number, height: number) => {
   for (let row = 0; row < height + 1; row++) {
     for (let col = 0; col < width + 1; col++) {
       vertices.push(col);
-      vertices.push(row);
       vertices.push(0);
+      vertices.push(row);
     }
   }
 
@@ -64,14 +74,14 @@ const indices = makeTriangleStrapIndices(w, h);
 
 const planeVertexShader = `#version 300 es
 
-    in vec2 aPosition;
+    in vec3 aPosition;
 
     uniform mat4 uModelMat;
     uniform mat4 uProjMat;
     uniform mat4 uViewMat;
     
     void main() {
-      gl_Position = uProjMat * uViewMat * uModelMat * vec4(aPosition, 0, 1);
+      gl_Position = uProjMat * uViewMat * uModelMat * vec4(aPosition, 1);
     }
   `;
 
@@ -108,7 +118,7 @@ gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(vertices), gl.STATIC_DRAW);
 
 gl.enableVertexAttribArray(posAttrLoc);
 
-const size = 2; // 2 components per iteration
+const size = 3; // 3 components per iteration
 const type = gl.FLOAT; // the data is 32bit floats
 const normalize = false; // don't normalize the data
 const stride = 0; // 0 = move forward size * sizeof(type) each iteration to get the next position
@@ -127,8 +137,8 @@ gl.bufferData(
 gl.bindVertexArray(null);
 
 const modelMat = mat4FromTranslation(mat4Create(), [0, 0, 0]);
-const projMat = mat4Perspective(mat4Create(), 90, aspectRatio, 0.01, 100);
-const viewMat = lookAt(mat4Create(), [0, 2, -2], [0, 0, 1], [0, 1, 0]);
+
+const viewMat = lookAt(mat4Create(), [1, 2, 0], [1, 0, 1], [0, 1, 0]);
 
 gl.useProgram(program);
 gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat);
@@ -147,7 +157,14 @@ const gameLoop = () => {
   const primitiveType = gl.TRIANGLE_STRIP;
   const offset = 0;
   const count = indices.length;
+
+  gl.useProgram(program);
+  // Updating just the projection matrix, because it might change
+  // due to the scrren size change
+  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
+
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
+
   gl.bindVertexArray(null);
 
   window.requestAnimationFrame(gameLoop);
