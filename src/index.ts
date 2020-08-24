@@ -5,7 +5,6 @@ import {
   perspective as mat4Perspective,
   lookAt,
 } from 'gl-matrix/mat4';
-import * as vec4 from 'gl-matrix/vec4';
 import { createShaderProgram } from './shaders';
 
 const canvas: HTMLCanvasElement | null = document.querySelector('canvas');
@@ -138,13 +137,13 @@ gl.bindVertexArray(null);
 
 const modelMat = mat4FromTranslation(mat4Create(), [0, 0, 0]);
 
-const viewMat = lookAt(mat4Create(), [1, 2, 0], [1, 0, 1], [0, 1, 0]);
+const viewMat = lookAt(mat4Create(), [w / 2, 1, 0], [w / 2, 0, 1], [0, 1, 0]);
 
 gl.useProgram(program);
 gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat);
 gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
 gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
-gl.uniform4fv(uniColorLoc, vec4.fromValues(0.6, 0.2, 0.2, 1));
+gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
 
 gl.clearColor(0, 0, 0, 1);
 
