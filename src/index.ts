@@ -139,32 +139,47 @@ const modelMat = mat4FromTranslation(mat4Create(), [0, 0, 0]);
 
 const viewMat = lookAt(mat4Create(), [w / 2, 1, 0], [w / 2, 0, 1], [0, 1, 0]);
 
-gl.useProgram(program);
-gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat);
-gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
-gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
-gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
+/////////////
+// prettier-ignore
+const shipVertices = new Float32Array([
+  -0.5, 0, -0.5,
+   0.5, 0, -0.5,
+     0, 0,  0.5,
+]);
 
-gl.clearColor(0, 0, 0, 1);
+const shipVertexBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, shipVertices, gl.STATIC_DRAW);
+gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
+gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+const shipColor = [0.1, 0.1, 0.9, 1];
+const shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.5, 0]);
+/////////
 
 const gameLoop = () => {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clearColor(0, 0, 0, 1);
+
+  gl.useProgram(program);
 
   gl.bindVertexArray(vao);
-
+  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat);
+  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
+  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
+  gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
   const primitiveType = gl.TRIANGLE_STRIP;
   const offset = 0;
   const count = indices.length;
-
-  gl.useProgram(program);
-  // Updating just the projection matrix, because it might change
-  // due to the scrren size change
-  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
-
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
-
   gl.bindVertexArray(null);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
+  gl.uniform4fv(uniColorLoc, shipColor);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, shipModelMat);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
   window.requestAnimationFrame(gameLoop);
 };
