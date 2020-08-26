@@ -135,9 +135,9 @@ gl.bufferData(
 
 gl.bindVertexArray(null);
 
-const modelMat = mat4FromTranslation(mat4Create(), [0, 0, 0]);
+const modelMat = mat4FromTranslation(mat4Create(), [-w / 2, 0, 0]);
 
-const viewMat = lookAt(mat4Create(), [w / 2, 1, 0], [w / 2, 0, 1], [0, 1, 0]);
+const viewMat = lookAt(mat4Create(), [0, 1, 0], [0, 0, 1], [0, 1, 0]);
 
 /////////////
 // prettier-ignore
@@ -148,19 +148,21 @@ const shipVertices = new Float32Array([
 ]);
 
 const shipVertexBuffer = gl.createBuffer();
+console.assert(shipVertexBuffer);
 gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
 gl.bufferData(gl.ARRAY_BUFFER, shipVertices, gl.STATIC_DRAW);
 gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
 gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
 const shipColor = [0.1, 0.1, 0.9, 1];
-const shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.5, 0]);
+const shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 0.5]);
 /////////
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0, 0, 0, 1);
 
 const gameLoop = () => {
   gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   gl.useProgram(program);
 
@@ -176,9 +178,11 @@ const gameLoop = () => {
   gl.bindVertexArray(null);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
+  // NOTE: Always remember about enabling the vertex attrib array!
+  gl.enableVertexAttribArray(posAttrLoc);
   gl.uniform4fv(uniColorLoc, shipColor);
   gl.uniformMatrix4fv(uniModelMatLoc, false, shipModelMat);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.drawArrays(gl.TRIANGLES, 0, shipVertices.length / 3);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
   window.requestAnimationFrame(gameLoop);
