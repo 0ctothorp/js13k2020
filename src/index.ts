@@ -4,6 +4,7 @@ import {
   create as mat4Create,
   perspective as mat4Perspective,
   lookAt,
+  translate,
 } from 'gl-matrix/mat4';
 import { createShaderProgram } from './shaders';
 
@@ -29,10 +30,13 @@ window.addEventListener('resize', () => {
   projMat = getPerspectiveMatrix(aspect);
 });
 
+// a Map is easily iterable
+const keydownListeners = new Map<string, Set<() => void>>();
+
 const gl = canvas.getContext('webgl2');
 assert(gl, 'No webgl2');
 
-const makeTriangleStrapVertices = (width: number, height: number) => {
+const makeTriangleStripVertices = (width: number, height: number) => {
   // TODO: It'd probably be more efficient if I had allocated the needed memory
   // upfront?
   const vertices: number[] = [];
@@ -50,9 +54,10 @@ const makeTriangleStrapVertices = (width: number, height: number) => {
 
 const w = 3;
 const h = 3;
-const vertices = makeTriangleStrapVertices(w, h);
+const vertices = makeTriangleStripVertices(w, h);
 
-const makeTriangleStrapIndices = (width: number, height: number) => {
+const makeTriangleStripIndices = (width: number, height: number) => {
+  // TODO: create new Uint16Array instance instead of using number array
   const indices: number[] = [];
 
   for (let i = 0; i < height; i++) {
@@ -69,7 +74,7 @@ const makeTriangleStrapIndices = (width: number, height: number) => {
   return indices;
 };
 
-const indices = makeTriangleStrapIndices(w, h);
+const indices = makeTriangleStripIndices(w, h);
 
 const planeVertexShader = `#version 300 es
 
@@ -155,17 +160,73 @@ gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
 gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
 const shipColor = [0.1, 0.1, 0.9, 1];
-const shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 0.5]);
+let shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 0.5]);
+
+const shipSpeed = 50;
+const moveShipHorizontally = (deltaTime: number, direction: 1 | -1) => {
+  translate(shipModelMat, shipModelMat, [
+    shipSpeed * deltaTime * direction,
+    0,
+    0,
+  ]);
+};
+
+const pressed = {
+  ArrowLeft: false,
+  ArrowRight: false,
+  ArrowUp: false,
+  ArrowDown: false,
+};
+
+window.addEventListener('keydown', (event) => {
+  switch (event.code) {
+    case 'ArrowRight':
+      pressed[event.code] = true;
+      break;
+    case 'ArrowLeft':
+      pressed[event.code] = true;
+      break;
+    case 'ArrowUp':
+      pressed[event.code] = true;
+      break;
+    case 'ArrowDown':
+      pressed[event.code] = true;
+      break;
+  }
+});
+
+window.addEventListener('keyup', (event) => {
+  switch (event.code) {
+    case 'ArrowRight':
+      pressed[event.code] = false;
+      break;
+    case 'ArrowLeft':
+      pressed[event.code] = false;
+      break;
+    case 'ArrowUp':
+      pressed[event.code] = false;
+      break;
+    case 'ArrowDown':
+      pressed[event.code] = false;
+      break;
+  }
+});
+
 /////////
+
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 1);
 
-const gameLoop = () => {
+let prevElapsed: number | undefined;
+let delta = 0;
+
+const gameLoop = (elapsed: number) => {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   gl.useProgram(program);
 
+  translate(modelMat, modelMat, [0, 0, (-10 * delta) / 1000]);
   gl.bindVertexArray(vao);
   gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat);
   gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
@@ -177,6 +238,13 @@ const gameLoop = () => {
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
   gl.bindVertexArray(null);
 
+  if (pressed.ArrowRight) {
+    moveShipHorizontally(delta / 1000, -1);
+  }
+  if (pressed.ArrowLeft) {
+    moveShipHorizontally(delta / 1000, 1);
+  }
+
   gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
   // NOTE: Always remember about enabling the vertex attrib array!
   gl.enableVertexAttribArray(posAttrLoc);
@@ -185,6 +253,7 @@ const gameLoop = () => {
   gl.drawArrays(gl.TRIANGLES, 0, shipVertices.length / 3);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
+  delta = performance.now() - elapsed;
   window.requestAnimationFrame(gameLoop);
 };
 
