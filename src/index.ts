@@ -1,3 +1,9 @@
+// # Jak zaimplementować nieskończoną "autostradę"
+// - na początku wyrenderować 3 plejny 5x5
+// - gdy pierwszy zniknie z widoku, to przestać go renderować i zacząć renderować "nowy" na końcu
+// - ???
+// - profit
+
 import { assert } from './utils';
 import {
   fromTranslation as mat4FromTranslation,
@@ -5,7 +11,9 @@ import {
   perspective as mat4Perspective,
   lookAt,
   translate,
+  getTranslation,
 } from 'gl-matrix/mat4';
+import { create as vec3Create } from 'gl-matrix/vec3';
 import { createShaderProgram } from './shaders';
 
 const canvas: HTMLCanvasElement | null = document.querySelector('canvas');
@@ -30,9 +38,6 @@ window.addEventListener('resize', () => {
   projMat = getPerspectiveMatrix(aspect);
 });
 
-// a Map is easily iterable
-const keydownListeners = new Map<string, Set<() => void>>();
-
 const gl = canvas.getContext('webgl2');
 assert(gl, 'No webgl2');
 
@@ -52,8 +57,8 @@ const makeTriangleStripVertices = (width: number, height: number) => {
   return vertices;
 };
 
-const w = 3;
-const h = 3;
+const w = 5;
+const h = 5;
 const vertices = makeTriangleStripVertices(w, h);
 
 const makeTriangleStripIndices = (width: number, height: number) => {
@@ -140,7 +145,9 @@ gl.bufferData(
 
 gl.bindVertexArray(null);
 
-const modelMat = mat4FromTranslation(mat4Create(), [-w / 2, 0, 0]);
+const modelMat1 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 0]);
+const modelMat2 = mat4FromTranslation(mat4Create(), [-w / 2, 0, h]);
+const modelMat3 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 2 * h]);
 
 const viewMat = lookAt(mat4Create(), [0, 1, 0], [0, 0, 1], [0, 1, 0]);
 
@@ -226,15 +233,40 @@ const gameLoop = (elapsed: number) => {
 
   gl.useProgram(program);
 
-  translate(modelMat, modelMat, [0, 0, (-10 * delta) / 1000]);
+  // first plane
+  const t = vec3Create();
+  getTranslation(modelMat1, t);
+  console.log({ t });
+
+  translate(modelMat1, modelMat1, [0, 0, (-10 * delta) / 1000]);
   gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat1);
   gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
   gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
   gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
   const primitiveType = gl.TRIANGLE_STRIP;
   const offset = 0;
   const count = indices.length;
+  gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
+  gl.bindVertexArray(null);
+
+  // second plane
+  translate(modelMat2, modelMat2, [0, 0, (-10 * delta) / 1000]);
+  gl.bindVertexArray(vao);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat2);
+  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
+  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
+  gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
+  gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
+  gl.bindVertexArray(null);
+
+  // third plane
+  translate(modelMat3, modelMat3, [0, 0, (-10 * delta) / 1000]);
+  gl.bindVertexArray(vao);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat3);
+  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
+  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
+  gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
   gl.bindVertexArray(null);
 
