@@ -227,6 +227,8 @@ gl.clearColor(0, 0, 0, 1);
 let prevElapsed: number | undefined;
 let delta = 0;
 
+const DELTA_DIVISOR = 1000;
+
 const gameLoop = (elapsed: number) => {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -234,9 +236,8 @@ const gameLoop = (elapsed: number) => {
   gl.useProgram(program);
 
   // first plane
-  const t = vec3Create();
-  getTranslation(modelMat1, t);
-  console.log({ t });
+  const ret = getTranslation(vec3Create(), modelMat1);
+  console.log({ ret: ret.toString() });
 
   translate(modelMat1, modelMat1, [0, 0, (-10 * delta) / 1000]);
   gl.bindVertexArray(vao);
@@ -271,10 +272,10 @@ const gameLoop = (elapsed: number) => {
   gl.bindVertexArray(null);
 
   if (pressed.ArrowRight) {
-    moveShipHorizontally(delta / 1000, -1);
+    moveShipHorizontally(delta / DELTA_DIVISOR, -1);
   }
   if (pressed.ArrowLeft) {
-    moveShipHorizontally(delta / 1000, 1);
+    moveShipHorizontally(delta / DELTA_DIVISOR, 1);
   }
 
   gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);

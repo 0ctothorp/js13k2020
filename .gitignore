@@ -1,8 +1,7 @@
-.build
-build
-web_modules
 node_modules
 *.swp
+dist
+zipped/*.zip
 
 # yarn
 yarn-error.log

@@ -1,14 +1,29 @@
 {
   "scripts": {
-    "start": "snowpack dev",
-    "build": "snowpack build"
+    "start": "webpack-dev-server --config webpack.dev.js",
+    "build": "webpack --config webpack.prod.js",
+    "check-file-size": "yarn node ./scripts/check-file-size.js",
+    "build-zipped": "yarn run build && yarn node ./scripts/zip-file.js",
+    "party": "yarn run build-zipped && yarn run check-file-size"
   },
   "dependencies": {
     "gl-matrix": "file:/home/octothorp/code/TrySound.gl-matrix/dist"
   },
   "devDependencies": {
+    "archiver": "^5.0.0",
+    "chalk": "^4.1.0",
+    "clean-webpack-plugin": "^3.0.0",
+    "html-webpack-plugin": "^4.4.1",
+    "inline-chunk-html-plugin": "^1.0.4",
     "prettier": "^2.0.5",
     "snowpack": "^2.8.0",
-    "typescript": "^3.9.7"
+    "terser-webpack-plugin": "^4.1.0",
+    "ts-loader": "^8.0.3",
+    "typescript": "^3.9.7",
+    "webpack": "^4.44.1",
+    "webpack-bundle-analyzer": "^3.8.0",
+    "webpack-cli": "^3.3.12",
+    "webpack-dev-server": "^3.11.0",
+    "webpack-merge": "^5.1.3"
   }
 }
