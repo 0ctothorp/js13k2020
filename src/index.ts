@@ -12,8 +12,9 @@ import {
   lookAt,
   translate,
   getTranslation,
+  fromRotationTranslation,
 } from 'gl-matrix/mat4';
-import { create as vec3Create } from 'gl-matrix/vec3';
+import { create as vec3Create, add as vec3Add } from 'gl-matrix/vec3';
 import { createShaderProgram } from './shaders';
 
 const canvas: HTMLCanvasElement | null = document.querySelector('canvas');
@@ -149,6 +150,8 @@ const modelMat1 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 0]);
 const modelMat2 = mat4FromTranslation(mat4Create(), [-w / 2, 0, h]);
 const modelMat3 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 2 * h]);
 
+const floorsModelMats = [modelMat1, modelMat2, modelMat3];
+
 const viewMat = lookAt(mat4Create(), [0, 1, 0], [0, 0, 1], [0, 1, 0]);
 
 /////////////
@@ -229,6 +232,12 @@ let delta = 0;
 
 const DELTA_DIVISOR = 1000;
 
+const floorsPositions = [
+  [-w / 2, 0, 0],
+  [-w / 2, 0, h],
+  [-w / 2, 0, h * 2],
+];
+
 const gameLoop = (elapsed: number) => {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -236,12 +245,28 @@ const gameLoop = (elapsed: number) => {
   gl.useProgram(program);
 
   // first plane
-  const ret = getTranslation(vec3Create(), modelMat1);
+  const ret = getTranslation(vec3Create(), floorsModelMats[0]);
   console.log({ ret: ret.toString() });
+  if (ret[2] < -h - 0.5) {
+    const ref0 = floorsModelMats[0];
+    const ref2 = floorsModelMats[2];
+    floorsModelMats[0] = floorsModelMats[1];
+    floorsModelMats[1] = floorsModelMats[2];
+    floorsModelMats[2] = ref0;
+
+    fromRotationTranslation(
+      ref0,
+      [0, 0, 0, 0],
+      vec3Add(vec3Create(), getTranslation(vec3Create(), ref2), [0, 0, h]),
+    );
+  }
 
   translate(modelMat1, modelMat1, [0, 0, (-10 * delta) / 1000]);
+  translate(modelMat2, modelMat2, [0, 0, (-10 * delta) / 1000]);
+  translate(modelMat3, modelMat3, [0, 0, (-10 * delta) / 1000]);
+
   gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat1);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, floorsModelMats[0]);
   gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
   gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
   gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
@@ -252,22 +277,16 @@ const gameLoop = (elapsed: number) => {
   gl.bindVertexArray(null);
 
   // second plane
-  translate(modelMat2, modelMat2, [0, 0, (-10 * delta) / 1000]);
   gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat2);
-  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
-  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
-  gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, floorsModelMats[1]);
+  gl.uniform4fv(uniColorLoc, [0.2, 0.6, 0.2, 1]);
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
   gl.bindVertexArray(null);
 
   // third plane
-  translate(modelMat3, modelMat3, [0, 0, (-10 * delta) / 1000]);
   gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat3);
-  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
-  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
-  gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, floorsModelMats[2]);
+  gl.uniform4fv(uniColorLoc, [0.2, 0.2, 0.6, 1]);
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
   gl.bindVertexArray(null);
 
