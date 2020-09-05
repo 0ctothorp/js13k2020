@@ -42,46 +42,6 @@ window.addEventListener('resize', () => {
 const gl = canvas.getContext('webgl2');
 assert(gl, 'No webgl2');
 
-const makeTriangleStripVertices = (width: number, height: number) => {
-  // TODO: It'd probably be more efficient if I had allocated the needed memory
-  // upfront?
-  const vertices: number[] = [];
-
-  for (let row = 0; row < height + 1; row++) {
-    for (let col = 0; col < width + 1; col++) {
-      vertices.push(col);
-      vertices.push(0);
-      vertices.push(row);
-    }
-  }
-
-  return vertices;
-};
-
-const w = 5;
-const h = 15;
-const vertices = makeTriangleStripVertices(w, h);
-
-const makeTriangleStripIndices = (width: number, height: number) => {
-  // TODO: create new Uint16Array instance instead of using number array
-  const indices: number[] = [];
-
-  for (let i = 0; i < height; i++) {
-    for (let j = i * (width + 1); j < (i + 1) * (width + 1); j++) {
-      indices.push(j);
-      indices.push(j + width + 1);
-    }
-    if (i < height - 1) {
-      indices.push((i + 2) * width + 1);
-      indices.push((i + 1) * width + 1);
-    }
-  }
-
-  return indices;
-};
-
-const indices = makeTriangleStripIndices(w, h);
-
 const planeVertexShader = `#version 300 es
 
     in vec3 aPosition;
@@ -118,13 +78,25 @@ const uniProjMatLoc = gl.getUniformLocation(program, 'uProjMat');
 const uniViewMatLoc = gl.getUniformLocation(program, 'uViewMat');
 const uniColorLoc = gl.getUniformLocation(program, 'uColor');
 
+// floor
+// prettier-ignore
+const floorVertices = new Float32Array([
+  -0.5, 0, -0.5,
+   0.5, 0, -0.5,
+  -0.5, 0,  0.5,
+  
+  -0.5, 0,  0.5,
+   0.5, 0,  0.5,
+   0.5, 0, -0.5
+]);
+
 const vao = gl.createVertexArray();
 gl.bindVertexArray(vao);
 
 const posBuffer = gl.createBuffer();
 assert(posBuffer, "Couldn't create position buffer");
 gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(vertices), gl.STATIC_DRAW);
+gl.bufferData(gl.ARRAY_BUFFER, floorVertices, gl.STATIC_DRAW);
 
 gl.enableVertexAttribArray(posAttrLoc);
 
@@ -135,18 +107,9 @@ const stride = 0; // 0 = move forward size * sizeof(type) each iteration to get 
 const offset = 0; // start at the beginning of the buffer
 gl.vertexAttribPointer(posAttrLoc, size, type, normalize, stride, offset);
 
-const indicesBuffer = gl.createBuffer();
-assert(indicesBuffer, "Couldn't create indices buffer");
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
-gl.bufferData(
-  gl.ELEMENT_ARRAY_BUFFER,
-  Uint16Array.from(indices),
-  gl.STATIC_DRAW,
-);
-
 gl.bindVertexArray(null);
 
-const modelMat1 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 0]);
+const modelMat1 = mat4FromTranslation(mat4Create(), [0, 0, 0]);
 
 const viewMat = lookAt(mat4Create(), [0, 2, 0], [0, 0, 1], [0, 1, 0]);
 
@@ -309,10 +272,7 @@ const gameLoop = (elapsed: number) => {
   gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
   gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
   gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
-  const primitiveType = gl.TRIANGLE_STRIP;
-  const offset = 0;
-  const count = indices.length;
-  gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
+  gl.drawArrays(gl.TRIANGLES, 0, floorVertices.length / 3);
   gl.bindVertexArray(null);
 
   if (pressed.ArrowRight) {
