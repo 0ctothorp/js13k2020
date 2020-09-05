@@ -59,7 +59,7 @@ const makeTriangleStripVertices = (width: number, height: number) => {
 };
 
 const w = 5;
-const h = 5;
+const h = 15;
 const vertices = makeTriangleStripVertices(w, h);
 
 const makeTriangleStripIndices = (width: number, height: number) => {
@@ -147,14 +147,10 @@ gl.bufferData(
 gl.bindVertexArray(null);
 
 const modelMat1 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 0]);
-const modelMat2 = mat4FromTranslation(mat4Create(), [-w / 2, 0, h]);
-const modelMat3 = mat4FromTranslation(mat4Create(), [-w / 2, 0, 2 * h]);
 
-const floorsModelMats = [modelMat1, modelMat2, modelMat3];
+const viewMat = lookAt(mat4Create(), [0, 2, 0], [0, 0, 1], [0, 1, 0]);
 
-const viewMat = lookAt(mat4Create(), [0, 1, 0], [0, 0, 1], [0, 1, 0]);
-
-/////////////
+// ship
 // prettier-ignore
 const shipVertices = new Float32Array([
   -0.5, 0, -0.5,
@@ -166,6 +162,7 @@ const shipVertexBuffer = gl.createBuffer();
 console.assert(shipVertexBuffer);
 gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
 gl.bufferData(gl.ARRAY_BUFFER, shipVertices, gl.STATIC_DRAW);
+gl.enableVertexAttribArray(posAttrLoc);
 gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
 gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
@@ -181,6 +178,75 @@ const moveShipHorizontally = (deltaTime: number, direction: 1 | -1) => {
   ]);
 };
 
+// blocks
+// prettier-ignore
+const blockVertices = new Float32Array([
+  // front 
+  -0.5, 0, -0.5,
+  -0.5, 1, -0.5,
+   0.5, 0, -0.5,
+
+   0.5, 0, -0.5,
+   0.5, 1, -0.5,
+  -0.5, 1, -0.5,
+
+  // back 
+  -0.5, 0, 0.5,
+  -0.5, 1, 0.5,
+   0.5, 0, 0.5,
+
+   0.5, 0, 0.5,
+   0.5, 1, 0.5,
+  -0.5, 1, 0.5,
+
+  // bottom
+  -0.5, 0, -0.5,
+  -0.5, 0,  0.5,
+   0.5, 0, -0.5,
+
+   0.5, 0, -0.5,
+   0.5, 0,  0.5,
+  -0.5, 0,  0.5,
+  
+  // top
+  -0.5, 1, -0.5,
+  -0.5, 1,  0.5,
+   0.5, 1, -0.5,
+
+   0.5, 1, -0.5,
+   0.5, 1,  0.5,
+  -0.5, 1,  0.5,
+
+  // left
+  -0.5, 0, -0.5,
+  -0.5, 1, -0.5,
+  -0.5, 0,  0.5,
+
+  -0.5, 0,  0.5,
+  -0.5, 1,  0.5,
+  -0.5, 1, -0.5,
+
+  // right
+  0.5, 0, -0.5,
+  0.5, 1, -0.5,
+  0.5, 0,  0.5,
+
+  0.5, 0,  0.5,
+  0.5, 1,  0.5,
+  0.5, 1, -0.5,
+]);
+
+const blockVertexBuffer = gl.createBuffer();
+console.assert(blockVertexBuffer);
+gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, blockVertices, gl.STATIC_DRAW);
+gl.enableVertexAttribArray(posAttrLoc);
+gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
+gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+let blockModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 2.5]);
+
+// input
 const pressed = {
   ArrowLeft: false,
   ArrowRight: false,
@@ -232,61 +298,20 @@ let delta = 0;
 
 const DELTA_DIVISOR = 1000;
 
-const floorsPositions = [
-  [-w / 2, 0, 0],
-  [-w / 2, 0, h],
-  [-w / 2, 0, h * 2],
-];
-
 const gameLoop = (elapsed: number) => {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   gl.useProgram(program);
 
-  // first plane
-  const ret = getTranslation(vec3Create(), floorsModelMats[0]);
-  console.log({ ret: ret.toString() });
-  if (ret[2] < -h - 0.5) {
-    const ref0 = floorsModelMats[0];
-    const ref2 = floorsModelMats[2];
-    floorsModelMats[0] = floorsModelMats[1];
-    floorsModelMats[1] = floorsModelMats[2];
-    floorsModelMats[2] = ref0;
-
-    fromRotationTranslation(
-      ref0,
-      [0, 0, 0, 0],
-      vec3Add(vec3Create(), getTranslation(vec3Create(), ref2), [0, 0, h]),
-    );
-  }
-
-  translate(modelMat1, modelMat1, [0, 0, (-10 * delta) / 1000]);
-  translate(modelMat2, modelMat2, [0, 0, (-10 * delta) / 1000]);
-  translate(modelMat3, modelMat3, [0, 0, (-10 * delta) / 1000]);
-
   gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, floorsModelMats[0]);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat1);
   gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
   gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
   gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
   const primitiveType = gl.TRIANGLE_STRIP;
   const offset = 0;
   const count = indices.length;
-  gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
-  gl.bindVertexArray(null);
-
-  // second plane
-  gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, floorsModelMats[1]);
-  gl.uniform4fv(uniColorLoc, [0.2, 0.6, 0.2, 1]);
-  gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
-  gl.bindVertexArray(null);
-
-  // third plane
-  gl.bindVertexArray(vao);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, floorsModelMats[2]);
-  gl.uniform4fv(uniColorLoc, [0.2, 0.2, 0.6, 1]);
   gl.drawElements(primitiveType, count, gl.UNSIGNED_SHORT, offset);
   gl.bindVertexArray(null);
 
@@ -297,12 +322,25 @@ const gameLoop = (elapsed: number) => {
     moveShipHorizontally(delta / DELTA_DIVISOR, 1);
   }
 
+  gl.useProgram(program);
   gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
-  // NOTE: Always remember about enabling the vertex attrib array!
-  gl.enableVertexAttribArray(posAttrLoc);
   gl.uniform4fv(uniColorLoc, shipColor);
   gl.uniformMatrix4fv(uniModelMatLoc, false, shipModelMat);
+  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
+  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
+  // No need to enable vertexAttribPointer since it was enabled
+  // before entering the loop?
+  gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
   gl.drawArrays(gl.TRIANGLES, 0, shipVertices.length / 3);
+
+  translate(blockModelMat, blockModelMat, [0, 0, -0.01 * delta]);
+  gl.useProgram(program);
+  gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
+  gl.uniform4fv(uniColorLoc, [0.1, 0.7, 0.3, 1]);
+  gl.uniformMatrix4fv(uniModelMatLoc, false, blockModelMat);
+  gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, blockVertices.length / 3);
+
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
   delta = performance.now() - elapsed;
