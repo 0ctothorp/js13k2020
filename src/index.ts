@@ -1,9 +1,3 @@
-// # Jak zaimplementować nieskończoną "autostradę"
-// - na początku wyrenderować 3 plejny 5x5
-// - gdy pierwszy zniknie z widoku, to przestać go renderować i zacząć renderować "nowy" na końcu
-// - ???
-// - profit
-
 import { assert } from './utils';
 import {
   fromTranslation as mat4FromTranslation,
@@ -13,6 +7,7 @@ import {
   translate,
   getTranslation,
   fromRotationTranslation,
+  fromRotationTranslationScale,
 } from 'gl-matrix/mat4';
 import { create as vec3Create, add as vec3Add } from 'gl-matrix/vec3';
 import { createShaderProgram } from './shaders';
@@ -81,13 +76,13 @@ const uniColorLoc = gl.getUniformLocation(program, 'uColor');
 // floor
 // prettier-ignore
 const floorVertices = new Float32Array([
-  -0.5, 0, -0.5,
-   0.5, 0, -0.5,
-  -0.5, 0,  0.5,
+  -0.5, 0, 0,
+   0.5, 0, 0,
+  -0.5, 0, 1,
   
-  -0.5, 0,  0.5,
-   0.5, 0,  0.5,
-   0.5, 0, -0.5
+  -0.5, 0, 1,
+   0.5, 0, 1,
+   0.5, 0, 0 
 ]);
 
 const vao = gl.createVertexArray();
@@ -109,9 +104,14 @@ gl.vertexAttribPointer(posAttrLoc, size, type, normalize, stride, offset);
 
 gl.bindVertexArray(null);
 
-const modelMat1 = mat4FromTranslation(mat4Create(), [0, 0, 0]);
+const modelMat1 = fromRotationTranslationScale(
+  mat4Create(),
+  [0, 0, 0, 0],
+  [0, 0, -1.5],
+  [5, 1, 25],
+);
 
-const viewMat = lookAt(mat4Create(), [0, 2, 0], [0, 0, 1], [0, 1, 0]);
+const viewMat = lookAt(mat4Create(), [0, 2, 0], [0, 0, 1.1], [0, 1, 0]);
 
 // ship
 // prettier-ignore
@@ -130,9 +130,9 @@ gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
 gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
 const shipColor = [0.1, 0.1, 0.9, 1];
-let shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 0.5]);
+let shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, -0.5]);
 
-const shipSpeed = 50;
+const shipSpeed = 0.05;
 const moveShipHorizontally = (deltaTime: number, direction: 1 | -1) => {
   translate(shipModelMat, shipModelMat, [
     shipSpeed * deltaTime * direction,
@@ -141,7 +141,34 @@ const moveShipHorizontally = (deltaTime: number, direction: 1 | -1) => {
   ]);
 };
 
+const getShipCurrent2dPosition = () => {
+  const translation = getTranslation(vec3Create(), shipModelMat);
+  const [x1, y1, z1, x2, y2, z2, x3, y3, z3] = shipVertices;
+  const v1 = [x1, y1, z1];
+  const v2 = [x2, y2, z2];
+  const v3 = [x3, y3, z3];
+  const tv1 = vec3Add(vec3Create(), v1, translation);
+  const tv2 = vec3Add(vec3Create(), v2, translation);
+  const tv3 = vec3Add(vec3Create(), v3, translation);
+  return [
+    [tv1[0], tv1[2]],
+    [tv2[0], tv2[2]],
+    [tv3[0], tv3[2]],
+  ];
+};
+
 // blocks
+//prettier-ignore
+const blockBaseVertices = [
+  -0.5, 0, -0.5, // 1
+  -0.5, 0,  0.5, // 2
+   0.5, 0, -0.5, // 3
+
+   0.5, 0, -0.5,
+   0.5, 0,  0.5, // 4
+  -0.5, 0,  0.5,
+];
+
 // prettier-ignore
 const blockVertices = new Float32Array([
   // front 
@@ -163,14 +190,8 @@ const blockVertices = new Float32Array([
   -0.5, 1, 0.5,
 
   // bottom
-  -0.5, 0, -0.5,
-  -0.5, 0,  0.5,
-   0.5, 0, -0.5,
-
-   0.5, 0, -0.5,
-   0.5, 0,  0.5,
-  -0.5, 0,  0.5,
-  
+  ...blockBaseVertices,
+ 
   // top
   -0.5, 1, -0.5,
   -0.5, 1,  0.5,
@@ -208,6 +229,27 @@ gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
 gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
 let blockModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 2.5]);
+
+const groupBy3 = <T>(arr: T[]) =>
+  arr.reduce<T[][]>((prev, curr, idx) => {
+    const ret = [...prev];
+    if (idx % 3 === 0) {
+      return [...ret, [curr]];
+    }
+    ret[prev.length - 1].push(curr);
+    return ret;
+  }, []);
+
+const getBlockTranslatedBaseVertices = () => {
+  const [v1, v2, v3, _, v4] = groupBy3(blockBaseVertices);
+  const translation = getTranslation(vec3Create(), blockModelMat);
+  return [
+    vec3Add(vec3Create(), v1, translation),
+    vec3Add(vec3Create(), v2, translation),
+    vec3Add(vec3Create(), v3, translation),
+    vec3Add(vec3Create(), v4, translation),
+  ];
+};
 
 // input
 const pressed = {
@@ -256,12 +298,49 @@ window.addEventListener('keyup', (event) => {
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 1);
 
-let prevElapsed: number | undefined;
 let delta = 0;
 
-const DELTA_DIVISOR = 1000;
+const processInput = () => {
+  if (pressed.ArrowRight) {
+    moveShipHorizontally(delta, -1);
+  }
+  if (pressed.ArrowLeft) {
+    moveShipHorizontally(delta, 1);
+  }
+};
 
 const gameLoop = (elapsed: number) => {
+  processInput();
+
+  // simulate
+  translate(blockModelMat, blockModelMat, [0, 0, -0.01 * delta]);
+
+  // when does the triangle and a square overlap?
+  // - when at least one vertex of a triangle is inside the square
+  // - when at least one vertex of a square is inside the triangle
+  // - when one edge of a triangle intersects any edge of a square
+  // jak w przypadku tej gry mogę łatwo stwierdzić, czy jadący kwadrat
+  // koliduje z trójkątem?
+  // kwadrat porusza się tylko w osi y;
+  // natomiast statek porusza się obecnie tylko po osi x, ale może
+  // chciałbym, żeby mógł się poruszać też w y;
+  // scenariusz, w którym statek lata tylko na boki jest łatwiejszy;
+  // Skoro statek porusza się tylko na boki i do góry i nie obraca sie,
+  // to znaczy, że tylko dół statku może się stykać krawędzią z kwadratem
+  // (sytuacja kiedy cofałbym statkiem).
+  // Potrzebuję w prosty sposób mieć dostęp do aktualnej pozycji wierzchołków.
+  // Obecnie musiałbym z macierzy modelu wyciągać wektor translacji, a potem
+  // zaaplikować go do wierzchołków obiektu.
+
+  const translatedShipVertices = getShipCurrent2dPosition();
+  // TODO:
+  // 1. get squares that are below a certain z coordinate
+  // 2. for every square from point 1:
+  //   2.1. check if any triangle's vertex is inside a square.
+  //   2.2. check if any square's vertex is inside a triangle.
+  const translatedBlockBaseVertices = getBlockTranslatedBaseVertices();
+
+  // draw
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -275,14 +354,6 @@ const gameLoop = (elapsed: number) => {
   gl.drawArrays(gl.TRIANGLES, 0, floorVertices.length / 3);
   gl.bindVertexArray(null);
 
-  if (pressed.ArrowRight) {
-    moveShipHorizontally(delta / DELTA_DIVISOR, -1);
-  }
-  if (pressed.ArrowLeft) {
-    moveShipHorizontally(delta / DELTA_DIVISOR, 1);
-  }
-
-  gl.useProgram(program);
   gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
   gl.uniform4fv(uniColorLoc, shipColor);
   gl.uniformMatrix4fv(uniModelMatLoc, false, shipModelMat);
@@ -293,8 +364,6 @@ const gameLoop = (elapsed: number) => {
   gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
   gl.drawArrays(gl.TRIANGLES, 0, shipVertices.length / 3);
 
-  translate(blockModelMat, blockModelMat, [0, 0, -0.01 * delta]);
-  gl.useProgram(program);
   gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
   gl.uniform4fv(uniColorLoc, [0.1, 0.7, 0.3, 1]);
   gl.uniformMatrix4fv(uniModelMatLoc, false, blockModelMat);
