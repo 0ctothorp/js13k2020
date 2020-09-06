@@ -116,9 +116,9 @@ const viewMat = lookAt(mat4Create(), [0, 2, 0], [0, 0, 1.1], [0, 1, 0]);
 // ship
 // prettier-ignore
 const shipVertices = new Float32Array([
-  -0.5, 0, -0.5,
-   0.5, 0, -0.5,
-     0, 0,  0.5,
+  -0.5, 0, -0.5, //left
+   0.5, 0, -0.5, //right
+     0, 0,  0.5, //top
 ]);
 
 const shipVertexBuffer = gl.createBuffer();
@@ -161,7 +161,7 @@ const getShipCurrent2dPosition = () => {
 //prettier-ignore
 const blockBaseVertices = [
   -0.5, 0, -0.5, // 1
-  -0.5, 0,  0.5, // 2
+  -0.5, 0,  0.5, // 2 - top left
    0.5, 0, -0.5, // 3
 
    0.5, 0, -0.5,
@@ -295,6 +295,23 @@ window.addEventListener('keyup', (event) => {
 
 /////////
 
+type Vertex2d = [number, number];
+
+const isVertexInsideASquare2d = (
+  vertex: Vertex2d,
+  { topLeft, size }: { topLeft: Vertex2d; size: number },
+) => {
+  const [vx, vy] = vertex;
+  return !(
+    vx < topLeft[0] ||
+    vx > topLeft[0] + size ||
+    vy < topLeft[1] ||
+    vy > topLeft[1] + size
+  );
+};
+
+/////////
+
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 1);
 
@@ -319,18 +336,6 @@ const gameLoop = (elapsed: number) => {
   // - when at least one vertex of a triangle is inside the square
   // - when at least one vertex of a square is inside the triangle
   // - when one edge of a triangle intersects any edge of a square
-  // jak w przypadku tej gry mogę łatwo stwierdzić, czy jadący kwadrat
-  // koliduje z trójkątem?
-  // kwadrat porusza się tylko w osi y;
-  // natomiast statek porusza się obecnie tylko po osi x, ale może
-  // chciałbym, żeby mógł się poruszać też w y;
-  // scenariusz, w którym statek lata tylko na boki jest łatwiejszy;
-  // Skoro statek porusza się tylko na boki i do góry i nie obraca sie,
-  // to znaczy, że tylko dół statku może się stykać krawędzią z kwadratem
-  // (sytuacja kiedy cofałbym statkiem).
-  // Potrzebuję w prosty sposób mieć dostęp do aktualnej pozycji wierzchołków.
-  // Obecnie musiałbym z macierzy modelu wyciągać wektor translacji, a potem
-  // zaaplikować go do wierzchołków obiektu.
 
   const translatedShipVertices = getShipCurrent2dPosition();
   // TODO:
@@ -339,6 +344,18 @@ const gameLoop = (elapsed: number) => {
   //   2.1. check if any triangle's vertex is inside a square.
   //   2.2. check if any square's vertex is inside a triangle.
   const translatedBlockBaseVertices = getBlockTranslatedBaseVertices();
+  // FIXME: This crap doesn't work...
+  const isTopVertexInsideASquare = isVertexInsideASquare2d(
+    [translatedShipVertices[2][0], translatedShipVertices[2][2]],
+    {
+      topLeft: [
+        translatedBlockBaseVertices[2][0],
+        translatedBlockBaseVertices[2][2],
+      ],
+      size: 1,
+    },
+  );
+  console.log(isTopVertexInsideASquare);
 
   // draw
   gl.viewport(0, 0, canvas.width, canvas.height);
