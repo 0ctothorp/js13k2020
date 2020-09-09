@@ -344,18 +344,19 @@ const gameLoop = (elapsed: number) => {
   //   2.1. check if any triangle's vertex is inside a square.
   //   2.2. check if any square's vertex is inside a triangle.
   const translatedBlockBaseVertices = getBlockTranslatedBaseVertices();
-  // FIXME: This crap doesn't work...
+
+  const blockBaseTopLeft = translatedBlockBaseVertices[0];
+  const shipTop = translatedShipVertices[2];
   const isTopVertexInsideASquare = isVertexInsideASquare2d(
-    [translatedShipVertices[2][0], translatedShipVertices[2][2]],
+    shipTop as [number, number],
     {
-      topLeft: [
-        translatedBlockBaseVertices[2][0],
-        translatedBlockBaseVertices[2][2],
-      ],
+      topLeft: [blockBaseTopLeft[0], blockBaseTopLeft[2]],
       size: 1,
     },
   );
-  console.log(isTopVertexInsideASquare);
+  if (isTopVertexInsideASquare) {
+    console.log({ blockBaseTopLeft });
+  }
 
   // draw
   gl.viewport(0, 0, canvas.width, canvas.height);
