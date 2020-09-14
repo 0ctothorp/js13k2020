@@ -9,6 +9,7 @@ import {
   fromRotationTranslation,
   fromRotationTranslationScale,
 } from 'gl-matrix/mat4';
+import { mat4 } from 'gl-matrix/types/types';
 import { create as vec3Create, add as vec3Add } from 'gl-matrix/vec3';
 import { createShaderProgram } from './shaders';
 
@@ -132,7 +133,7 @@ gl.bindBuffer(gl.ARRAY_BUFFER, null);
 const shipColor = [0.1, 0.1, 0.9, 1];
 let shipModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, -0.5]);
 
-const shipSpeed = 0.05;
+const shipSpeed = 0.005;
 const moveShipHorizontally = (deltaTime: number, direction: 1 | -1) => {
   translate(shipModelMat, shipModelMat, [
     shipSpeed * deltaTime * direction,
@@ -220,15 +221,27 @@ const blockVertices = new Float32Array([
   0.5, 1, -0.5,
 ]);
 
-const blockVertexBuffer = gl.createBuffer();
-console.assert(blockVertexBuffer);
-gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
-gl.bufferData(gl.ARRAY_BUFFER, blockVertices, gl.STATIC_DRAW);
-gl.enableVertexAttribArray(posAttrLoc);
-gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
-gl.bindBuffer(gl.ARRAY_BUFFER, null);
+const getBlockVertexBuffer = () => {
+  const blockVertexBuffer = gl.createBuffer();
+  console.assert(blockVertexBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, blockVertices, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(posAttrLoc);
+  gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  return blockVertexBuffer;
+};
 
-let blockModelMat = mat4FromTranslation(mat4Create(), [0, 0.1, 2.5]);
+const blocksInitialPositions = [
+  [0, 0.1, 6],
+  [1, 0.1, 7.5],
+];
+
+const blockVertexBuffer = getBlockVertexBuffer();
+
+const blocksModelMats = blocksInitialPositions.map((p) =>
+  mat4FromTranslation(mat4Create(), p),
+);
 
 const groupBy3 = <T>(arr: T[]) =>
   arr.reduce<T[][]>((prev, curr, idx) => {
@@ -240,9 +253,9 @@ const groupBy3 = <T>(arr: T[]) =>
     return ret;
   }, []);
 
-const getBlockTranslatedBaseVertices = () => {
+const getBlockTranslatedBaseVertices = (modelMat: mat4) => {
   const [v1, v2, v3, _, v4] = groupBy3(blockBaseVertices);
-  const translation = getTranslation(vec3Create(), blockModelMat);
+  const translation = getTranslation(vec3Create(), modelMat);
   return [
     vec3Add(vec3Create(), v1, translation),
     vec3Add(vec3Create(), v2, translation),
@@ -326,16 +339,24 @@ const processInput = () => {
   }
 };
 
+gl.useProgram(program);
+gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
+gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
+
+let prevTime: number | null = null;
+
 const gameLoop = (elapsed: number) => {
+  if (!prevTime) {
+    prevTime = elapsed;
+    delta = 16.67;
+  } else {
+    delta = elapsed - prevTime;
+  }
+
   processInput();
 
   // simulate
-  translate(blockModelMat, blockModelMat, [0, 0, -0.01 * delta]);
-
-  // when does the triangle and a square overlap?
-  // - when at least one vertex of a triangle is inside the square
-  // - when at least one vertex of a square is inside the triangle
-  // - when one edge of a triangle intersects any edge of a square
+  blocksModelMats.forEach((m) => translate(m, m, [0, 0, -0.001 * delta]));
 
   const translatedShipVertices = getShipCurrent2dPosition();
   // TODO:
@@ -343,31 +364,39 @@ const gameLoop = (elapsed: number) => {
   // 2. for every square from point 1:
   //   2.1. check if any triangle's vertex is inside a square.
   //   2.2. check if any square's vertex is inside a triangle.
-  const translatedBlockBaseVertices = getBlockTranslatedBaseVertices();
 
-  const blockBaseTopLeft = translatedBlockBaseVertices[0];
-  const shipTop = translatedShipVertices[2];
-  const isTopVertexInsideASquare = isVertexInsideASquare2d(
-    shipTop as [number, number],
-    {
-      topLeft: [blockBaseTopLeft[0], blockBaseTopLeft[2]],
+  blocksModelMats.forEach((m, i) => {
+    const translatedBaseVertices = getBlockTranslatedBaseVertices(m);
+    const blockBaseTopLeft = translatedBaseVertices[0];
+    const shipTop = translatedShipVertices[2];
+    const shipLeft = translatedShipVertices[0];
+    const shipRight = translatedShipVertices[1];
+    const blockBaseShape = {
+      topLeft: [blockBaseTopLeft[0], blockBaseTopLeft[2]] as [number, number],
       size: 1,
-    },
-  );
-  if (isTopVertexInsideASquare) {
-    console.log({ blockBaseTopLeft });
-  }
+    };
+    const isTopVertexInsideASquare = isVertexInsideASquare2d(
+      shipTop as [number, number],
+      blockBaseShape,
+    );
+    const isLeftVertexInsideASquare = isVertexInsideASquare2d(
+      shipLeft as [number, number],
+      blockBaseShape,
+    );
+    if (isTopVertexInsideASquare || isLeftVertexInsideASquare) {
+      blocksModelMats[i] = mat4FromTranslation(
+        mat4Create(),
+        blocksInitialPositions[i],
+      );
+    }
+  });
 
   // draw
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  gl.useProgram(program);
-
   gl.bindVertexArray(vao);
   gl.uniformMatrix4fv(uniModelMatLoc, false, modelMat1);
-  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
-  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
   gl.uniform4fv(uniColorLoc, [0.6, 0.2, 0.2, 1]);
   gl.drawArrays(gl.TRIANGLES, 0, floorVertices.length / 3);
   gl.bindVertexArray(null);
@@ -375,22 +404,18 @@ const gameLoop = (elapsed: number) => {
   gl.bindBuffer(gl.ARRAY_BUFFER, shipVertexBuffer);
   gl.uniform4fv(uniColorLoc, shipColor);
   gl.uniformMatrix4fv(uniModelMatLoc, false, shipModelMat);
-  gl.uniformMatrix4fv(uniProjMatLoc, false, projMat);
-  gl.uniformMatrix4fv(uniViewMatLoc, false, viewMat);
-  // No need to enable vertexAttribPointer since it was enabled
-  // before entering the loop?
   gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
   gl.drawArrays(gl.TRIANGLES, 0, shipVertices.length / 3);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
   gl.uniform4fv(uniColorLoc, [0.1, 0.7, 0.3, 1]);
-  gl.uniformMatrix4fv(uniModelMatLoc, false, blockModelMat);
-  gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
-  gl.drawArrays(gl.TRIANGLES, 0, blockVertices.length / 3);
+  blocksModelMats.forEach((m) => {
+    gl.uniformMatrix4fv(uniModelMatLoc, false, m);
+    gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, blockVertices.length / 3);
+  });
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-  delta = performance.now() - elapsed;
+  prevTime = elapsed;
   window.requestAnimationFrame(gameLoop);
 };
 
