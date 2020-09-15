@@ -12,6 +12,7 @@ import {
 import { mat4 } from 'gl-matrix/types/types';
 import { create as vec3Create, add as vec3Add } from 'gl-matrix/vec3';
 import { createShaderProgram } from './shaders';
+import { isVertexInsideASquare2d } from './geometry';
 
 const canvas: HTMLCanvasElement | null = document.querySelector('canvas');
 assert(canvas, 'No canvas');
@@ -308,23 +309,6 @@ window.addEventListener('keyup', (event) => {
 
 /////////
 
-type Vertex2d = [number, number];
-
-const isVertexInsideASquare2d = (
-  vertex: Vertex2d,
-  { topLeft, size }: { topLeft: Vertex2d; size: number },
-) => {
-  const [vx, vy] = vertex;
-  return !(
-    vx < topLeft[0] ||
-    vx > topLeft[0] + size ||
-    vy < topLeft[1] ||
-    vy > topLeft[1] + size
-  );
-};
-
-/////////
-
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 1);
 
@@ -356,39 +340,31 @@ const gameLoop = (elapsed: number) => {
   processInput();
 
   // simulate
+  // TODO: Randomize speed of blocks
   blocksModelMats.forEach((m) => translate(m, m, [0, 0, -0.001 * delta]));
 
-  const translatedShipVertices = getShipCurrent2dPosition();
-  // TODO:
-  // 1. get squares that are below a certain z coordinate
-  // 2. for every square from point 1:
-  //   2.1. check if any triangle's vertex is inside a square.
-  //   2.2. check if any square's vertex is inside a triangle.
-
   blocksModelMats.forEach((m, i) => {
-    const translatedBaseVertices = getBlockTranslatedBaseVertices(m);
-    const blockBaseTopLeft = translatedBaseVertices[0];
-    const shipTop = translatedShipVertices[2];
-    const shipLeft = translatedShipVertices[0];
-    const shipRight = translatedShipVertices[1];
+    const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
+
+    const shipTranslated = getShipCurrent2dPosition();
+
     const blockBaseShape = {
       topLeft: [blockBaseTopLeft[0], blockBaseTopLeft[2]] as [number, number],
       size: 1,
     };
-    const isTopVertexInsideASquare = isVertexInsideASquare2d(
-      shipTop as [number, number],
-      blockBaseShape,
+
+    const isInsideASquare = shipTranslated.some((p) =>
+      isVertexInsideASquare2d(p as [number, number], blockBaseShape),
     );
-    const isLeftVertexInsideASquare = isVertexInsideASquare2d(
-      shipLeft as [number, number],
-      blockBaseShape,
-    );
-    if (isTopVertexInsideASquare || isLeftVertexInsideASquare) {
+
+    if (isInsideASquare) {
       blocksModelMats[i] = mat4FromTranslation(
         mat4Create(),
         blocksInitialPositions[i],
       );
     }
+
+    // TODO: Check if any of the two bottom square vertices are inside a ship's triangle
   });
 
   // draw
