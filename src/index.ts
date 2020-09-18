@@ -1,4 +1,4 @@
-import { assert } from './utils';
+import { assert, groupBy3, falsyFilter } from './utils';
 import {
   fromTranslation as mat4FromTranslation,
   create as mat4Create,
@@ -145,18 +145,9 @@ const moveShipHorizontally = (deltaTime: number, direction: 1 | -1) => {
 
 const getShipCurrent2dPosition = () => {
   const translation = getTranslation(vec3Create(), shipModelMat);
-  const [x1, y1, z1, x2, y2, z2, x3, y3, z3] = shipVertices;
-  const v1 = [x1, y1, z1];
-  const v2 = [x2, y2, z2];
-  const v3 = [x3, y3, z3];
-  const tv1 = vec3Add(vec3Create(), v1, translation);
-  const tv2 = vec3Add(vec3Create(), v2, translation);
-  const tv3 = vec3Add(vec3Create(), v3, translation);
-  return [
-    [tv1[0], tv1[2]],
-    [tv2[0], tv2[2]],
-    [tv3[0], tv3[2]],
-  ];
+  return groupBy3([...shipVertices])
+    .map((v) => vec3Add(vec3Create(), v, translation))
+    .map((v) => [v[0], v[2]]);
 };
 
 // blocks
@@ -233,26 +224,31 @@ const getBlockVertexBuffer = () => {
   return blockVertexBuffer;
 };
 
-const blocksInitialPositions = [
-  [0, 0.1, 6],
-  [1, 0.1, 7.5],
+const BLOCKS_STARTING_Z = 8;
+
+// prettier-ignore
+const blocksLayout = [
+  [1, 0, 1, 0],
+  [0, 0, 0, 0],
+  [0, 0, 1, 0],
+  [1, 0, 0, 1],
+  [0, 0, 0, 0],
+  [0, 1, 0, 0],
 ];
+
+const blocksInitialPositions = blocksLayout
+  .reverse()
+  .flatMap((row, i) =>
+    row
+      .map((x, j) => (x ? [(j - 1.5) * 2, 0.01, i + BLOCKS_STARTING_Z] : null))
+      .filter(falsyFilter),
+  );
 
 const blockVertexBuffer = getBlockVertexBuffer();
 
 const blocksModelMats = blocksInitialPositions.map((p) =>
   mat4FromTranslation(mat4Create(), p),
 );
-
-const groupBy3 = <T>(arr: T[]) =>
-  arr.reduce<T[][]>((prev, curr, idx) => {
-    const ret = [...prev];
-    if (idx % 3 === 0) {
-      return [...ret, [curr]];
-    }
-    ret[prev.length - 1].push(curr);
-    return ret;
-  }, []);
 
 const getBlockTranslatedBaseVertices = (modelMat: mat4) => {
   const [v1, v2, v3, _, v4] = groupBy3(blockBaseVertices);
@@ -358,10 +354,11 @@ const gameLoop = (elapsed: number) => {
     );
 
     if (isInsideASquare) {
-      blocksModelMats[i] = mat4FromTranslation(
-        mat4Create(),
-        blocksInitialPositions[i],
-      );
+      blocksModelMats[i] = mat4FromTranslation(mat4Create(), [
+        Math.random() * 5 - 2.5,
+        0.01,
+        BLOCKS_STARTING_Z + Math.random() * 3,
+      ]);
     }
 
     // TODO: Check if any of the two bottom square vertices are inside a ship's triangle
