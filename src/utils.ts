@@ -12,6 +12,8 @@ export const groupBy3 = <T>(arr: T[]) =>
     return ret;
   }, []);
 
-export const falsyFilter = <T>(
+type Falsy = undefined | null | false | 0 | '';
+
+export const falsyFilter = <T extends string | number | {} | Falsy>(
   x: T,
-): x is Exclude<T, null | undefined | false | 0> => !!x;
+): x is Exclude<T, Falsy> => !!x;

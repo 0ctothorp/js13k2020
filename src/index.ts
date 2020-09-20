@@ -13,6 +13,7 @@ import { mat4 } from 'gl-matrix/types/types';
 import { create as vec3Create, add as vec3Add } from 'gl-matrix/vec3';
 import { createShaderProgram } from './shaders';
 import { isVertexInsideASquare2d } from './geometry';
+import { pressed } from './input';
 
 const canvas: HTMLCanvasElement | null = document.querySelector('canvas');
 assert(canvas, 'No canvas');
@@ -224,7 +225,7 @@ const getBlockVertexBuffer = () => {
   return blockVertexBuffer;
 };
 
-const BLOCKS_STARTING_Z = 8;
+const BLOCKS_STARTING_Z = 18;
 
 // prettier-ignore
 const blocksLayout = [
@@ -234,13 +235,21 @@ const blocksLayout = [
   [1, 0, 0, 1],
   [0, 0, 0, 0],
   [0, 1, 0, 0],
+  [0, 0, 0, 1],
+  [1, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 1, 0, 1],
+  [1, 0, 0, 0],
+  [0, 0, 1, 0],
+  [0, 0, 0, 0],
+  [1, 0, 0, 1]
 ];
 
 const blocksInitialPositions = blocksLayout
   .reverse()
   .flatMap((row, i) =>
     row
-      .map((x, j) => (x ? [(j - 1.5) * 2, 0.01, i + BLOCKS_STARTING_Z] : null))
+      .map((x, j) => (x ? [(j - 1.5) * 2, 0.01, i + BLOCKS_STARTING_Z] : 0))
       .filter(falsyFilter),
   );
 
@@ -260,48 +269,6 @@ const getBlockTranslatedBaseVertices = (modelMat: mat4) => {
     vec3Add(vec3Create(), v4, translation),
   ];
 };
-
-// input
-const pressed = {
-  ArrowLeft: false,
-  ArrowRight: false,
-  ArrowUp: false,
-  ArrowDown: false,
-};
-
-window.addEventListener('keydown', (event) => {
-  switch (event.code) {
-    case 'ArrowRight':
-      pressed[event.code] = true;
-      break;
-    case 'ArrowLeft':
-      pressed[event.code] = true;
-      break;
-    case 'ArrowUp':
-      pressed[event.code] = true;
-      break;
-    case 'ArrowDown':
-      pressed[event.code] = true;
-      break;
-  }
-});
-
-window.addEventListener('keyup', (event) => {
-  switch (event.code) {
-    case 'ArrowRight':
-      pressed[event.code] = false;
-      break;
-    case 'ArrowLeft':
-      pressed[event.code] = false;
-      break;
-    case 'ArrowUp':
-      pressed[event.code] = false;
-      break;
-    case 'ArrowDown':
-      pressed[event.code] = false;
-      break;
-  }
-});
 
 /////////
 
@@ -336,11 +303,16 @@ const gameLoop = (elapsed: number) => {
   processInput();
 
   // simulate
-  // TODO: Randomize speed of blocks
-  blocksModelMats.forEach((m) => translate(m, m, [0, 0, -0.001 * delta]));
+  blocksModelMats.forEach((m) => translate(m, m, [0, 0, -0.005 * delta]));
 
   blocksModelMats.forEach((m, i) => {
     const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
+
+    // TODO: Zmienić warunek na sprawdzający, czy bloki są wystarczająco blisko
+    // statku, żeby w ogóle sprawdzać kolizje
+    if (blockBaseTopLeft[2] > 10) {
+      return;
+    }
 
     const shipTranslated = getShipCurrent2dPosition();
 
@@ -354,11 +326,10 @@ const gameLoop = (elapsed: number) => {
     );
 
     if (isInsideASquare) {
-      blocksModelMats[i] = mat4FromTranslation(mat4Create(), [
-        Math.random() * 5 - 2.5,
-        0.01,
-        BLOCKS_STARTING_Z + Math.random() * 3,
-      ]);
+      blocksModelMats[i] = mat4FromTranslation(
+        mat4Create(),
+        blocksInitialPositions[i],
+      );
     }
 
     // TODO: Check if any of the two bottom square vertices are inside a ship's triangle
@@ -383,6 +354,12 @@ const gameLoop = (elapsed: number) => {
   gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
   gl.uniform4fv(uniColorLoc, [0.1, 0.7, 0.3, 1]);
   blocksModelMats.forEach((m) => {
+    const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
+
+    // TODO: Tweak this and stop rendering if the block goes out of the screen
+    if (blockBaseTopLeft[2] > 15) {
+      return;
+    }
     gl.uniformMatrix4fv(uniModelMatLoc, false, m);
     gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, blockVertices.length / 3);
