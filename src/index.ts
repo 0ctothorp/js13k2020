@@ -119,9 +119,9 @@ const viewMat = lookAt(mat4Create(), [0, 2, 0], [0, 0, 1.1], [0, 1, 0]);
 // ship
 // prettier-ignore
 const shipVertices = new Float32Array([
-  -0.5, 0, -0.5, //left
-   0.5, 0, -0.5, //right
-     0, 0,  0.5, //top
+  -0.4, 0, -0.4, //left
+   0.4, 0, -0.4, //right
+     0, 0,  0.4, //top
 ]);
 
 const shipVertexBuffer = gl.createBuffer();
@@ -230,9 +230,9 @@ const BLOCKS_STARTING_Z = 18;
 // prettier-ignore
 const blocksLayout = [
   [1, 0, 1, 0],
-  [0, 0, 0, 0],
+  [0, 2, 0, 0],
   [0, 0, 1, 0],
-  [1, 0, 0, 1],
+  [1, 0, 0, 2],
   [0, 0, 0, 0],
   [0, 1, 0, 0],
   [0, 0, 0, 1],
@@ -245,17 +245,29 @@ const blocksLayout = [
   [1, 0, 0, 1]
 ];
 
-const blocksInitialPositions = blocksLayout
-  .reverse()
-  .flatMap((row, i) =>
-    row
-      .map((x, j) => (x ? [(j - 1.5) * 2, 0.01, i + BLOCKS_STARTING_Z] : 0))
-      .filter(falsyFilter),
-  );
+const greenBlocksInitialPositions = blocksLayout.flatMap((row, i) =>
+  row
+    .map((x, j) => (x == 1 ? [(j - 1.5) * 2, 0.01, i + BLOCKS_STARTING_Z] : x))
+    .filter((x): x is number[] => typeof x == 'object'),
+);
+
+const redBlocksInitialPositions = blocksLayout.flatMap((row, i) =>
+  row
+    .map((x, j) => (x == 2 ? [(j - 1.5) * 2, 0.01, i + BLOCKS_STARTING_Z] : x))
+    .filter((x): x is number[] => typeof x == 'object'),
+);
 
 const blockVertexBuffer = getBlockVertexBuffer();
 
-const blocksModelMats = blocksInitialPositions.map((p) =>
+const blocksModelMats: Array<
+  mat4 | undefined
+> = greenBlocksInitialPositions.map((p) =>
+  mat4FromTranslation(mat4Create(), p),
+);
+
+// TODO: Do I need to keep all these matrices? It's a lot
+// of memory.
+const redBlocksModelMats = redBlocksInitialPositions.map((p) =>
   mat4FromTranslation(mat4Create(), p),
 );
 
@@ -303,9 +315,17 @@ const gameLoop = (elapsed: number) => {
   processInput();
 
   // simulate
-  blocksModelMats.forEach((m) => translate(m, m, [0, 0, -0.005 * delta]));
+  blocksModelMats
+    .filter(falsyFilter)
+    .forEach((m) => translate(m, m, [0, 0, -0.005 * delta]));
+
+  redBlocksModelMats
+    .filter(falsyFilter)
+    .forEach((m) => translate(m, m, [0, 0, -0.005 * delta]));
 
   blocksModelMats.forEach((m, i) => {
+    if (!m) return;
+
     const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
 
     // TODO: Zmienić warunek na sprawdzający, czy bloki są wystarczająco blisko
@@ -326,10 +346,36 @@ const gameLoop = (elapsed: number) => {
     );
 
     if (isInsideASquare) {
-      blocksModelMats[i] = mat4FromTranslation(
-        mat4Create(),
-        blocksInitialPositions[i],
-      );
+      blocksModelMats[i] = undefined;
+    }
+
+    // TODO: Check if any of the two bottom square vertices are inside a ship's triangle
+  });
+
+  redBlocksModelMats.forEach((m, i) => {
+    if (!m) return;
+
+    const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
+
+    // TODO: Zmienić warunek na sprawdzający, czy bloki są wystarczająco blisko
+    // statku, żeby w ogóle sprawdzać kolizje
+    if (blockBaseTopLeft[2] > 10) {
+      return;
+    }
+
+    const shipTranslated = getShipCurrent2dPosition();
+
+    const blockBaseShape = {
+      topLeft: [blockBaseTopLeft[0], blockBaseTopLeft[2]] as [number, number],
+      size: 1,
+    };
+
+    const isInsideASquare = shipTranslated.some((p) =>
+      isVertexInsideASquare2d(p as [number, number], blockBaseShape),
+    );
+
+    if (isInsideASquare) {
+      blocksModelMats[i] = undefined;
     }
 
     // TODO: Check if any of the two bottom square vertices are inside a ship's triangle
@@ -353,17 +399,48 @@ const gameLoop = (elapsed: number) => {
 
   gl.bindBuffer(gl.ARRAY_BUFFER, blockVertexBuffer);
   gl.uniform4fv(uniColorLoc, [0.1, 0.7, 0.3, 1]);
-  blocksModelMats.forEach((m) => {
+
+  const blocksToRemove: number[] = [];
+  blocksModelMats.forEach((m, idx) => {
+    if (!m) return;
+
     const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
 
     // TODO: Tweak this and stop rendering if the block goes out of the screen
     if (blockBaseTopLeft[2] > 15) {
       return;
     }
+
+    if (blockBaseTopLeft[2] < -2) {
+      blocksToRemove.push(idx);
+    }
+
     gl.uniformMatrix4fv(uniModelMatLoc, false, m);
     gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, blockVertices.length / 3);
   });
+
+  gl.uniform4fv(uniColorLoc, [0.8, 0.1, 0.3, 1]);
+  redBlocksModelMats.forEach((m, idx) => {
+    if (!m) return;
+
+    const blockBaseTopLeft = getBlockTranslatedBaseVertices(m)[0];
+
+    // TODO: Tweak this and stop rendering if the block goes out of the screen
+    if (blockBaseTopLeft[2] > 15) {
+      return;
+    }
+
+    if (blockBaseTopLeft[2] < -2) {
+      blocksToRemove.push(idx);
+    }
+
+    gl.uniformMatrix4fv(uniModelMatLoc, false, m);
+    gl.vertexAttribPointer(posAttrLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, blockVertices.length / 3);
+  });
+
+  blocksToRemove.forEach((x) => (blocksModelMats[x] = undefined));
 
   prevTime = elapsed;
   window.requestAnimationFrame(gameLoop);
